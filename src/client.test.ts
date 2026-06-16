@@ -82,6 +82,21 @@ describe("WhisperrClient", () => {
     expect(m.calls).toHaveLength(0);
   });
 
+  it("drops invalid event types before they can poison a batch", async () => {
+    const m = mockFetch();
+    const errors: WhisperrError[] = [];
+    const w = client(m.fn, (e) => errors.push(e));
+
+    w.track("user_1", "User Signed Up");
+    w.track("user_1", "checkout_completed");
+    await w.flush();
+
+    expect(errors.some((e) => e.type === "dropped")).toBe(true);
+    expect(m.calls).toHaveLength(1);
+    expect(m.calls[0]!.body.events).toHaveLength(1);
+    expect(m.calls[0]!.body.events[0].event_type).toBe("checkout_completed");
+  });
+
   it("stops on auth rejection and keeps the queue for a later flush", async () => {
     const m = mockFetch(401);
     const errors: WhisperrError[] = [];

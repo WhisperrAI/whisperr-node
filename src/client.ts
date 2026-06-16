@@ -90,13 +90,20 @@ export class WhisperrClient implements WhisperrApi {
     context?: Record<string, unknown>,
   ): void {
     if (this.muted || !externalUserId || !eventType) return;
-    if (this.debug && !SNAKE_CASE.test(eventType)) {
-      this.warn(`event_type "${eventType}" is not snake_case — the server will reject it`);
+    const type = eventType.trim();
+    if (!type) return;
+    if (!SNAKE_CASE.test(type)) {
+      this.emit({
+        type: "dropped",
+        message: `invalid event_type "${type}" — expected snake_case`,
+      });
+      this.warn(`invalid event_type "${type}" — event was not queued`);
+      return;
     }
     this.enqueue({
       kind: "track",
       externalUserId,
-      eventType,
+      eventType: type,
       properties,
       context,
       occurredAt: nowISO(),
