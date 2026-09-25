@@ -36,9 +36,10 @@ timeline automatically.
 - **Same wire contract as the web SDK.** Events post to `/v1/events/batch`,
   identities to `/v1/identify`, authenticated with `X-API-Key`.
 - **Reliable while the process is alive.** In-memory queue, batching, retry with
-  backoff (429/5xx), malformed-4xx drop, per-event idempotency key. On `401/403`
-  or exhausted retries, delivery pauses and the batch stays queued for the next
-  flush. The queue is **not** crash-durable — in serverless or before exit, call
+  backoff (429/5xx; a 429/503 `Retry-After` is honored, capped at 60s),
+  malformed-4xx drop, per-event idempotency key. On `401/403` or exhausted
+  retries, delivery pauses and the batch stays queued for the next flush. The
+  queue is **not** crash-durable — in serverless or before exit, call
   `await flush()` / `shutdown()` so unsent events aren't lost.
 - **Non-blocking.** `track()`/`identify()` enqueue and return immediately;
   delivery happens in the background. `await flush()` when you need a barrier.

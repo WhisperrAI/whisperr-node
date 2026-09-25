@@ -177,18 +177,18 @@ export class WhisperrClient implements WhisperrApi {
     }
   }
 
-  /** Send one batch, retrying transient failures with backoff. */
+  /** Send one batch, retrying transient failures with backoff (or the server's Retry-After). */
   private async deliver(batch: QueuedOp[]): Promise<DeliverResult> {
     let retries = 0;
     for (;;) {
-      const result =
+      const { result, retryAfterMs } =
         batch[0]!.kind === "identify"
           ? await this.transport.sendIdentify(batch[0] as IdentifyOp)
           : await this.transport.sendBatch(batch as TrackOp[]);
 
       if (result !== "retry") return result;
       if (++retries > this.maxRetries) return "retry_exhausted";
-      await delay(backoff(retries));
+      await delay(retryDelay(retries, retryAfterMs));
     }
   }
 
@@ -223,8 +223,9 @@ function buildChannels(params: IdentifyParams): WhisperrChannel[] | undefined {
   return out.length ? out : undefined;
 }
 
-function backoff(attempt: number): number {
-  const base = Math.min(30000, 1000 * 2 ** attempt);
+/** A server-sent Retry-After (already capped) wins over exponential backoff; both get jitter. */
+function retryDelay(attempt: number, retryAfterMs?: number): number {
+  const base = retryAfterMs ?? Math.min(30000, 1000 * 2 ** attempt);
   return base + Math.floor(Math.random() * 250);
 }
 
