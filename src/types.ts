@@ -39,7 +39,12 @@ export type WhisperrFetch = (
     body: string;
     signal?: AbortSignal;
   },
-) => Promise<{ ok: boolean; status: number }>;
+) => Promise<{
+  ok: boolean;
+  status: number;
+  /** Response headers; read for `Retry-After` on 429/503 when present. */
+  headers?: { get(name: string): string | null };
+}>;
 
 export interface WhisperrOptions {
   /** App ingestion key (wrk_…). Required. */
