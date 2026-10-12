@@ -1,5 +1,6 @@
 import { MemoryQueue } from "./queue.js";
 import { Transport } from "./transport.js";
+import { SDK_NAME, SDK_VERSION } from "./version.js";
 import type {
   IdentifyOp,
   IdentifyParams,
@@ -62,6 +63,7 @@ export class WhisperrClient implements WhisperrApi {
       options.requestTimeoutMs ?? 10000,
       fetchImpl ?? (noopFetch as WhisperrFetch),
       (msg) => this.warn(msg),
+      environmentContext(options.appVersion),
     );
 
     this.ready = !this.muted;
@@ -212,6 +214,14 @@ export class WhisperrClient implements WhisperrApi {
       console.warn(`[whisperr] ${msg}`);
     }
   }
+}
+
+/** The context keys the SDK adds to every event. No value, no key. */
+function environmentContext(appVersion: string | undefined): Record<string, string> {
+  const ctx: Record<string, string> = { sdk_name: SDK_NAME, sdk_version: SDK_VERSION };
+  const app = appVersion?.trim();
+  if (app) ctx.app_version = app;
+  return ctx;
 }
 
 function buildChannels(params: IdentifyParams): WhisperrChannel[] | undefined {

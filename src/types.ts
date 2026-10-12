@@ -51,6 +51,12 @@ export interface WhisperrOptions {
   apiKey: string;
   /** Ingestion base URL. Defaults to https://api.whisperr.net. */
   baseUrl?: string;
+  /**
+   * The release version of your app or service (for example `2026.10.1` or a
+   * git SHA). When set, every event carries it as `context.app_version`.
+   * Not set: the key is not sent.
+   */
+  appVersion?: string;
   /** Flush when this many events are queued. Default 20. */
   flushAt?: number;
   /** Flush at least this often (ms). Default 10000. Set 0 to disable the timer. */
