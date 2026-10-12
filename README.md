@@ -107,30 +107,55 @@ const whisperr = createWhisperr({
 ## Billing events
 
 If Whisperr has no billing source for your app (for example no RevenueCat or
-Stripe connection), send billing changes yourself. Use the reserved names in
-`BillingEvent`:
+Stripe connection), send billing changes from your backend yourself. Use the
+reserved names in `BillingEvent`:
 
-| Constant | Event name |
-|---|---|
-| `BillingEvent.trialStarted` | `trial_started` |
-| `BillingEvent.subscriptionStarted` | `subscription_started` |
-| `BillingEvent.subscriptionRenewed` | `subscription_renewed` |
-| `BillingEvent.paymentFailed` | `payment_failed` |
-| `BillingEvent.subscriptionCancelled` | `subscription_cancelled` |
-| `BillingEvent.purchaseCompleted` | `purchase_completed` |
+| Constant | Event name | When | Event properties |
+|---|---|---|---|
+| `BillingEvent.trialStarted` | `trial_started` | A free trial starts. | `trial_length_days`, `trial_ends_at`, `plan_period` |
+| `BillingEvent.trialConverted` | `trial_converted` | The trial converts to the first paid period. | `plan_period`, `current_period_ends_at` |
+| `BillingEvent.trialAutoRenewDisabled` | `trial_auto_renew_disabled` | The user cancels during the trial. | `trial_ends_at`, `store_cancel_reason` |
+| `BillingEvent.membershipStarted` | `membership_started` | A paid membership starts (never a renewal or a plan change). | `plan_period`, `is_resubscribe`, `is_first_ever`, `access_source`, `entitlements`, `current_period_ends_at` |
+| `BillingEvent.renewalSucceeded` | `renewal_succeeded` | A paid period renews. | `paid_periods_count`, `current_period_ends_at` |
+| `BillingEvent.autoRenewDisabled` | `auto_renew_disabled` | The user cancels; access continues to the period end. | `access_ends_at`, `store_cancel_reason` |
+| `BillingEvent.autoRenewEnabled` | `auto_renew_enabled` | The user turns auto-renew back on. | — |
+| `BillingEvent.membershipEnded` | `membership_ended` | Access ends. | `end_reason`, `plan_period`, `paid_periods_count` |
+| `BillingEvent.billingIssueStarted` | `billing_issue_started` | A payment fails and a billing issue starts. | `has_access`, `grace_ends_at` |
+| `BillingEvent.billingRecovered` | `billing_recovered` | The billing issue is resolved. | — |
+| `BillingEvent.refundGranted` | `refund_granted` | The store grants a refund. | — |
+
+Money properties, where they apply: `plan_id`, `price` (number, major units,
+for example `9.99`), `currency` (ISO 4217, upper case), `plan_period` (ISO 8601
+duration, for example `P1M`), `transaction_id`, `store`.
+
+Closed lists:
+
+- `store_cancel_reason`: `unsubscribe`, `billing_error`, `developer_initiated`,
+  `price_increase`, `customer_support`, `unknown`.
+- `end_reason`: `voluntary`, `billing`, `price_increase`, `product_unavailable`,
+  `developer_initiated`, `refund`, `other`.
+- `access_source`: `self_subscription`, `lifetime`, `family_share`,
+  `promotional`, `sponsored`, `web_other`.
+
+Send these events from your backend only, never from the front end.
 
 ```ts
 import { BillingEvent, type BillingEventProperties } from "@whisperr/node";
 
 const props: BillingEventProperties = {
-  product_id: "pro_monthly",
+  plan_id: "pro_monthly",
   price: 9.99, // major units, not cents
   currency: "USD", // ISO 4217, upper case
-  period: "P1M", // ISO 8601 duration
+  plan_period: "P1M", // ISO 8601 duration
   transaction_id: "1000000912345678",
   store: "app_store",
 };
-whisperr.track("user_8842", BillingEvent.subscriptionStarted, props);
+whisperr.track("user_8842", BillingEvent.membershipStarted, {
+  ...props,
+  is_first_ever: true,
+  access_source: "self_subscription",
+  current_period_ends_at: "2026-11-12T10:00:00Z",
+});
 ```
 
 > **Register these names first.** Today the server stores these events only
