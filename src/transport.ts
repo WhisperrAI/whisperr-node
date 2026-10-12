@@ -49,6 +49,8 @@ export class Transport {
     private readonly timeoutMs: number,
     private readonly fetchImpl: WhisperrFetch,
     private readonly warn: (msg: string) => void,
+    /** Added to every event's context (sdk_name, sdk_version, app_version). */
+    private readonly environment: Record<string, string> = {},
   ) {}
 
   async sendBatch(events: TrackOp[]): Promise<SendOutcome> {
@@ -58,9 +60,10 @@ export class Transport {
         event_type: e.eventType,
         occurred_at: e.occurredAt,
         properties: e.properties ?? {},
-        // $message_id is an idempotency key for backend dedup (nested in the
-        // free-form context so the strict ingestion accepts it).
-        context: { ...(e.context ?? {}), $message_id: e.messageId },
+        // A key the caller passes in context wins over the SDK's environment
+        // key. $message_id is an idempotency key for backend dedup (nested in
+        // the free-form context so the strict ingestion accepts it).
+        context: { ...this.environment, ...(e.context ?? {}), $message_id: e.messageId },
       })),
     };
     if (body.events.length === 0) return { result: "ok" };

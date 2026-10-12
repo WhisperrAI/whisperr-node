@@ -2,6 +2,9 @@ import { WhisperrClient } from "./client.js";
 import type { WhisperrApi, WhisperrOptions } from "./types.js";
 
 export * from "./types.js";
+export { BillingEvent } from "./billing.js";
+export type { BillingEventName, BillingEventProperties } from "./billing.js";
+export { SDK_NAME, SDK_VERSION } from "./version.js";
 export { WhisperrClient };
 
 /**
