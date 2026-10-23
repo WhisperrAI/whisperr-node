@@ -1,5 +1,7 @@
 /** Public types for the Whisperr Node (server-side) SDK. */
 
+import type { CatalogFetch, WhisperrCatalog } from "./catalog.js";
+
 export interface WhisperrChannel {
   /** "email" | "sms" | "push" | custom. */
   type: string;
@@ -77,6 +79,15 @@ export interface WhisperrOptions {
   onError?: (error: WhisperrError) => void;
   /** Injectable fetch implementation. Defaults to the global fetch. */
   fetch?: WhisperrFetch;
+  /** Options for `whisperr.catalog` (catalog push). */
+  catalog?: {
+    /** Retries after the first attempt on 429, 5xx and network errors. Default 5. */
+    maxRetries?: number;
+    /** Per-request timeout (ms). Default 30000. */
+    requestTimeoutMs?: number;
+    /** A fetch for catalog calls; it must expose `text()` on the response. Defaults to `fetch`, then the global fetch. */
+    fetch?: CatalogFetch;
+  };
 }
 
 export interface WhisperrError {
@@ -108,6 +119,11 @@ export interface WhisperrApi {
   shutdown(): Promise<void>;
   /** True when the client will capture (i.e. not disabled). */
   readonly ready: boolean;
+  /**
+   * Catalog push: upsert and delete items, full-sync snapshots, heartbeat and
+   * status. Needs a server key (`wrk_…`). Calls are sent right away, not queued.
+   */
+  readonly catalog: WhisperrCatalog;
 }
 
 // ---- internal wire/queue shapes ----

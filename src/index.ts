@@ -5,6 +5,43 @@ export * from "./types.js";
 export { BillingEvent } from "./billing.js";
 export type { BillingEventName, BillingEventProperties } from "./billing.js";
 export { SDK_NAME, SDK_VERSION } from "./version.js";
+export {
+  CATALOG_DELETE_BATCH,
+  CATALOG_FEED_PAGE_ITEMS,
+  CATALOG_MAX_BODY_BYTES,
+  CATALOG_UPSERT_BATCH,
+  WhisperrCatalogError,
+  WhisperrConfigurationError,
+  catalogFeedPage,
+  createWhisperrCatalog,
+} from "./catalog.js";
+export type {
+  CatalogAction,
+  CatalogAvailability,
+  CatalogCollection,
+  CatalogDeleteResult,
+  CatalogDeletion,
+  CatalogFeedPageInput,
+  CatalogFetch,
+  CatalogHeartbeatResult,
+  CatalogItem,
+  CatalogItemType,
+  CatalogKind,
+  CatalogLocalization,
+  CatalogOfferTerms,
+  CatalogPrice,
+  CatalogReference,
+  CatalogRejection,
+  CatalogSnapshot,
+  CatalogSnapshotCompleteResult,
+  CatalogSourceHealth,
+  CatalogTime,
+  CatalogUpsertResult,
+  CatalogVariant,
+  WhisperrCatalog,
+  WhisperrCatalogOptions,
+} from "./catalog.js";
+export { currencyExponent, toMinorUnits } from "./money.js";
 export { WhisperrClient };
 
 /**

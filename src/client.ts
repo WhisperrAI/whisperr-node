@@ -1,3 +1,4 @@
+import { CatalogClient, type CatalogFetch, type WhisperrCatalog } from "./catalog.js";
 import { MemoryQueue } from "./queue.js";
 import { Transport } from "./transport.js";
 import { SDK_NAME, SDK_VERSION } from "./version.js";
@@ -33,6 +34,8 @@ export class WhisperrClient implements WhisperrApi {
   private readonly onError?: (error: WhisperrError) => void;
 
   private readonly muted: boolean;
+  private readonly options: WhisperrOptions;
+  private catalogClient?: CatalogClient;
   private drainChain: Promise<void> = Promise.resolve();
   private flushTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -40,6 +43,7 @@ export class WhisperrClient implements WhisperrApi {
     if (!options.apiKey && !options.disabled) {
       throw new Error("[whisperr] apiKey is required");
     }
+    this.options = options;
     const baseUrl = (options.baseUrl ?? DEFAULT_BASE).replace(/\/+$/, "");
     this.flushAt = options.flushAt ?? 20;
     this.maxBatchSize = Math.min(options.maxBatchSize ?? 500, 500);
@@ -70,6 +74,21 @@ export class WhisperrClient implements WhisperrApi {
 
     const intervalMs = options.flushIntervalMs ?? 10000;
     if (!this.muted && intervalMs > 0) this.startTimer(intervalMs);
+  }
+
+  get catalog(): WhisperrCatalog {
+    if (!this.catalogClient) {
+      const o = this.options;
+      this.catalogClient = new CatalogClient({
+        apiKey: o.apiKey,
+        baseUrl: o.baseUrl,
+        maxRetries: o.catalog?.maxRetries,
+        requestTimeoutMs: o.catalog?.requestTimeoutMs,
+        fetch: o.catalog?.fetch ?? (o.fetch as unknown as CatalogFetch | undefined),
+        disabled: this.muted,
+      });
+    }
+    return this.catalogClient;
   }
 
   identify(externalUserId: string, params: IdentifyParams = {}): void {
