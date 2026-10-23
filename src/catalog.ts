@@ -280,7 +280,7 @@ export class CatalogClient implements WhisperrCatalog {
   constructor(options: WhisperrCatalogOptions) {
     this.disabled = !!options.disabled;
     this.apiKey = (options.apiKey ?? "").trim();
-    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE).replace(/\/+$/, "");
+    this.baseUrl = trimTrailingSlashes(options.baseUrl ?? DEFAULT_BASE);
     this.maxRetries = Math.max(0, options.maxRetries ?? 5);
     this.timeoutMs = options.requestTimeoutMs ?? 30000;
     this.fetchImpl = options.fetch ?? (globalThis.fetch as unknown as CatalogFetch | undefined);
@@ -618,6 +618,12 @@ export function formatTime(value: CatalogTime, field: string): string {
     return value.toISOString().replace(".000Z", "Z");
   }
   throw new WhisperrConfigurationError(`${field} must be a Date or an RFC 3339 string`);
+}
+
+function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 47) end--;
+  return url.slice(0, end);
 }
 
 function put(target: Wire, key: string, value: unknown): void {
