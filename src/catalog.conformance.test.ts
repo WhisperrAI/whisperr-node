@@ -6,12 +6,25 @@ import { createWhisperrCatalog, WhisperrCatalogError, WhisperrConfigurationError
 import type { CatalogFetch } from "./catalog.js";
 import { toMinorUnits } from "./money.js";
 
-// The catalog push fixture. whisperr-spec conformance/catalog_push.json wins
-// when WHISPERR_CATALOG_SPEC_PATH points at it; until the spec publishes it,
-// the copy bundled here is the contract.
+// The catalog push fixture: fixtures/catalog_push.json is a byte-identical
+// copy of whisperr-spec conformance/catalog_push.json. Point
+// WHISPERR_CATALOG_SPEC_PATH at a spec checkout's file to run that copy
+// instead and to check the bundled one has not drifted from it.
 const here = dirname(fileURLToPath(import.meta.url));
-const fixturePath = process.env.WHISPERR_CATALOG_SPEC_PATH || resolve(here, "../fixtures/catalog_push.json");
+const bundledPath = resolve(here, "../fixtures/catalog_push.json");
+const specPath = process.env.WHISPERR_CATALOG_SPEC_PATH;
+const fixturePath = specPath || bundledPath;
 const spec = JSON.parse(readFileSync(fixturePath, "utf8"));
+// Client-side reject codes carry an SDK-defined message.
+const clientCodes = new Set<string>(spec.reject_codes.client);
+
+function expectedResult(c: any): any {
+  const want = camelize(c.result);
+  if (Array.isArray(want.rejected)) {
+    want.rejected = want.rejected.map((r: any) => (clientCodes.has(r.code) ? { ...r, message: expect.stringMatching(/\S/) } : r));
+  }
+  return want;
+}
 
 // Keys whose children are data (locales, extras attributes), not field names.
 const MAP_KEYS = new Set(["extras", "localizations"]);
@@ -120,7 +133,7 @@ describe("catalog push conformance", () => {
         }
       } else {
         if (error) throw error;
-        expect(result).toEqual(camelize(c.result));
+        expect(result).toEqual(expectedResult(c));
       }
     });
   }
@@ -136,5 +149,15 @@ describe("toMinorUnits conformance", () => {
 });
 
 it("the bundled fixture exists", () => {
-  expect(existsSync(fixturePath)).toBe(true);
+  expect(existsSync(bundledPath)).toBe(true);
+});
+
+it.runIf(Boolean(specPath))("the bundled fixture is byte-identical to the spec copy", () => {
+  expect(readFileSync(bundledPath, "utf8")).toBe(readFileSync(specPath!, "utf8"));
+});
+
+it("every reject code this SDK writes itself is a listed client-side code", () => {
+  // item_too_large is the only code the SDK adds; the server never sends it.
+  expect(spec.reject_codes.client).toEqual(["item_too_large"]);
+  expect(spec.reject_codes.server).not.toContain("item_too_large");
 });

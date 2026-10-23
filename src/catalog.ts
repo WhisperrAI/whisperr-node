@@ -120,6 +120,7 @@ export interface CatalogRejection {
   /** Index into the array you passed (not into one chunk). */
   index: number;
   sourceItemId: string;
+  /** A server reject code, or `item_too_large`, which only this SDK writes (the item cannot fit any request). */
   code: string;
   message: string;
 }
@@ -187,7 +188,10 @@ export interface WhisperrCatalog {
   beginSnapshot(): Promise<CatalogSnapshot>;
   /** End a full sync: items not upserted since `beginSnapshot` are removed. */
   completeSnapshot(snapshotId: string, itemCount: number): Promise<CatalogSnapshotCompleteResult>;
-  /** Tell Whisperr the catalog is still current. Send every 30 minutes with your live item count. */
+  /**
+   * Tell Whisperr the catalog is still current. Send every 30 minutes with your live item count.
+   * Refused with 409 `snapshot_open` while a full sync is open: complete the snapshot first.
+   */
   heartbeat(itemCount: number): Promise<CatalogHeartbeatResult>;
   /** The health of your pushed catalog. */
   status(): Promise<CatalogSourceHealth>;
@@ -205,7 +209,7 @@ export class WhisperrConfigurationError extends Error {
 export class WhisperrCatalogError extends Error {
   /** HTTP status; 0 for a network error or timeout. */
   readonly status: number;
-  /** The server's error code (e.g. `server_key_required`, `catalog_push_disabled`, `snapshot_not_open`), or `network_error`. */
+  /** The server's error code (e.g. `server_key_required`, `catalog_push_disabled`, `snapshot_not_open`, `snapshot_open`), or `network_error`. */
   readonly code: string;
   /** True when the retries ran out on a transient failure; calling again later can succeed. */
   readonly retryable: boolean;

@@ -18,9 +18,12 @@
 - `toMinorUnits(amount, currency)` and `currencyExponent(currency)` with the
   ISO 4217 exponents the server uses. They throw instead of rounding.
 - `catalogFeedPage(...)` builds a schema 1.1 catalog feed page.
-- Tests run `fixtures/catalog_push.json`, the catalog push conformance cases
-  (or `WHISPERR_CATALOG_SPEC_PATH`, once whisperr-spec publishes
-  `conformance/catalog_push.json`).
+- Tests run `fixtures/catalog_push.json`, a byte-identical copy of
+  whisperr-spec `conformance/catalog_push.json` (`WHISPERR_CATALOG_SPEC_PATH`
+  runs a spec checkout's file and checks the copy has not drifted). It pins
+  error bodies as the server sends them (`{"error":{"code","message"}}`), the
+  409 `snapshot_open` heartbeat refusal, the 404 feature-detect, the 413
+  split, and `item_too_large` as the one client-side reject code.
 
 ## 0.2.0 - 2026-10-12
 
