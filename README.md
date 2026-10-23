@@ -93,7 +93,7 @@ Every event carries these keys in `context`:
 | Key | Value |
 |---|---|
 | `sdk_name` | `whisperr-node` |
-| `sdk_version` | The SDK version, for example `0.2.0` |
+| `sdk_version` | The SDK version, for example `0.3.0` |
 | `app_version` | The `appVersion` option. Not set: no key. |
 
 A key that you pass in the `context` argument of `track()` wins over the SDK
@@ -165,6 +165,112 @@ whisperr.track("user_8842", BillingEvent.membershipStarted, {
 > the server accepts them without registration, an unregistered name is not
 > stored.
 
+## Catalog push
+
+Send your product catalog (or courses, content, plans) to Whisperr from your
+server, so messages can name real, in-stock items. Use a **server key**
+(`wrk_…`, Settings > API keys) from an environment variable such as
+`WHISPERR_SERVER_KEY`. Never commit or log it. A publishable key (`wpk_…`) is
+refused with a `WhisperrConfigurationError` before anything is sent.
+
+```ts
+import { createWhisperr, toMinorUnits } from "@whisperr/node";
+
+const whisperr = createWhisperr({ apiKey: process.env.WHISPERR_SERVER_KEY! });
+
+// When a product is created or changes:
+const result = await whisperr.catalog.upsert([
+  {
+    sourceItemId: "sku-1", // the same id you send as product_id in tracked events
+    type: "product",
+    name: "Trail Runner 2",
+    url: "https://shop.example.com/products/trail-runner-2",
+    availability: "available", // available | limited | unavailable | unknown
+    updatedAt: product.updatedAt, // when it last changed in your system
+    price: { amountMinor: toMinorUnits("89.00", "USD"), currency: "USD" },
+    imageUrl: "https://cdn.example.com/trail-runner-2.jpg",
+    compareAtMinor: toMinorUnits("110.00", "USD"),
+    productType: "Running shoes",
+    brand: "Acme",
+    collections: [{ id: "running", name: "Running", url: "https://shop.example.com/collections/running" }],
+    tags: ["summer"],
+    extras: { color: "blue" },
+  },
+]);
+// result: { accepted, applied, unchanged, ignoredOlder, rejected: [{ index, sourceItemId, code, message }] }
+
+// When products are removed:
+await whisperr.catalog.delete(["sku-1", "sku-2"]);
+
+// Full sync (daily, or after a bulk import): items you do not upsert between
+// begin and complete are removed.
+const { snapshotId } = await whisperr.catalog.beginSnapshot();
+for (const page of allProductPages()) await whisperr.catalog.upsert(page);
+await whisperr.catalog.completeSnapshot(snapshotId, totalCount);
+
+// Every 30 minutes, so Whisperr knows the catalog is still current. Not
+// while a full sync is open: complete the snapshot first (409 snapshot_open).
+await whisperr.catalog.heartbeat(totalCount);
+
+// Health of the pushed catalog:
+const health = await whisperr.catalog.status(); // { state: "ready", itemCount, lastPushAt, ... }
+```
+
+How it behaves:
+
+- **Sent right away, not queued.** Each call resolves once Whisperr has
+  answered. You do not need `flush()` for catalog calls.
+- **Chunked.** Upserts go in batches of 500 items (and at most 2 MiB per
+  request), deletes in batches of 1000. A `rejected[].index` is the index in
+  the array you passed. If a request still comes back 413, the chunk is split
+  in halves and resent; a single item that cannot fit is listed in `rejected`
+  with the code `item_too_large`. That code comes from the SDK, never from the
+  server; every other `rejected[].code` is the server's (`invalid_item`,
+  `missing_field`, `invalid_url`, `url_host_not_allowed`, `invalid_image_url`,
+  `invalid_price`, `invalid_currency`, `invalid_kind`, `revision_conflict`).
+- **Retried.** 429, 5xx and network errors are retried with backoff (default 5
+  retries), honoring `Retry-After`. When retries run out, the call throws a
+  `WhisperrCatalogError` with `retryable: true`; for upsert and delete,
+  `error.partial` holds what earlier chunks already did.
+- **Safe to repeat.** A retry sends the same body. Whisperr keeps the newest
+  write per item by `updatedAt` (deletes by `deletedAt`), so a repeated or late
+  call never overwrites newer data. `delete` uses one `deletedAt` for the whole
+  call (default: now). Always set `updatedAt` from your own data, not from the
+  time of the call.
+- **Refusals throw.** A refused call throws a `WhisperrCatalogError` with the
+  HTTP `status` and the server `code`, for example `server_key_required`,
+  `catalog_push_disabled` (the owner turned push off in the dashboard),
+  `snapshot_not_open`, or `snapshot_open` (a heartbeat while a full sync is
+  open). A 404 `route_not_implemented` means the push API is not on for this
+  deployment yet.
+- Only send what is listed in the item type: no descriptions, no image bytes.
+  Prices are integer minor units; `toMinorUnits(amount, currency)` converts
+  using the ISO 4217 exponent and throws rather than round.
+
+### A feed endpoint instead of push
+
+If you would rather have Whisperr fetch your catalog, serve pages built with
+`catalogFeedPage` (schema 1.1, at most 200 items per page) and register the
+endpoint with the Whisperr MCP tool `register_catalog_feed`. An owner confirms
+it in the dashboard before Whisperr calls it.
+
+```ts
+import { catalogFeedPage } from "@whisperr/node";
+
+app.get("/whisperr/catalog", requireBearer(process.env.WHISPERR_CATALOG_FEED_TOKEN), async (req, res) => {
+  const page = await loadPage(req.query.cursor); // your pagination
+  res.json(
+    catalogFeedPage({
+      snapshotId: exportId, // the same on every page of one export
+      generatedAt: exportStartedAt,
+      totalItems: exportCount,
+      items: page.items,
+      nextCursor: page.nextCursor, // null on the last page
+    }),
+  );
+});
+```
+
 ## Serverless
 
 In short-lived environments (Lambda, Vercel functions), `await whisperr.flush()`
@@ -187,6 +293,12 @@ before returning so queued events aren't lost when the runtime freezes.
 | `debug` | `false` | Verbose logging. |
 | `onError` | — | `(error) => void` for delivery/drop observability. |
 | `fetch` | global `fetch` | Inject for tests or custom runtimes. |
+| `catalog.maxRetries` | `5` | Catalog call retries on 429, 5xx and network errors. |
+| `catalog.requestTimeoutMs` | `30000` | Per-request timeout for catalog calls. |
+| `catalog.fetch` | `fetch` | A fetch for catalog calls; the response needs `text()`. |
+
+`createWhisperrCatalog({ apiKey, baseUrl?, maxRetries?, requestTimeoutMs?, fetch? })`
+creates a catalog client on its own, without the event queue.
 
 ---
 
